@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "3";
+const APP_VERSION = "4.7";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -26,8 +26,11 @@ let activeImageIndex = 0;
 let latestBounds = null;
 let hasCenteredOnUser = false;
 let userLocationMarker = null;
+let dotClickTimer = null;
+let lastDotClick = { id: "", time: 0 };
 
 const map = L.map("map", {
+  doubleClickZoom: false,
   zoomControl: false,
   scrollWheelZoom: true
 }).setView(AMSTERDAM_CENTER, 12);
@@ -81,6 +84,8 @@ function bindEvents() {
 
   prevImageButton.addEventListener("click", () => showImage(activeImageIndex - 1));
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
+  map.getContainer().addEventListener("click", handleDotClick, true);
+  map.getContainer().addEventListener("dblclick", handleDotDoubleClick, true);
 
   document.addEventListener("keydown", (event) => {
     if (!modal.classList.contains("is-open")) return;
@@ -296,10 +301,7 @@ function renderLocations(items) {
     <li>
       <button class="location-card" type="button" data-location-id="${location.id}">
         ${thumbnailHtml(location)}
-        <span>
-          <strong>${escapeHtml(location.name)}</strong>
-          <span>${escapeHtml(location.description || location.address || "Bekijk afbeeldingen")}</span>
-        </span>
+        <strong>${escapeHtml(location.name)}</strong>
       </button>
     </li>
   `).join("");
@@ -322,12 +324,9 @@ function renderMarkers(items, options = {}) {
   const bounds = [];
 
   items.forEach((location) => {
-    const marker = L.circleMarker([location.lat, location.lng], {
-      radius: 6,
-      color: "#ffffff",
-      weight: 2,
-      fillColor: "#0d6b57",
-      fillOpacity: 1
+    const marker = L.marker([location.lat, location.lng], {
+      icon: createDotIcon(location),
+      title: location.name
     }).addTo(map);
     marker.bindPopup(popupHtml(location));
     marker.on("popupopen", () => {
@@ -343,6 +342,65 @@ function renderMarkers(items, options = {}) {
     refreshMapLayout({ fitBounds: fitToBounds });
   } else {
     latestBounds = null;
+  }
+}
+
+function createDotIcon(location) {
+  return L.divIcon({
+    className: "map-dot-marker",
+    html: `<span class="map-dot-button" data-dot-location-id="${escapeAttribute(location.id)}"></span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -9]
+  });
+}
+
+function handleDotClick(event) {
+  const button = event.target.closest("[data-dot-location-id]");
+  if (!button) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const id = button.dataset.dotLocationId;
+  const marker = markers.get(id);
+  const location = locations.find((item) => item.id === id);
+  if (!marker || !location) return;
+
+  const now = Date.now();
+  if (event.detail >= 2 || (lastDotClick.id === id && now - lastDotClick.time < 700)) {
+    cancelDotClickTimer();
+    marker.closePopup();
+    openModal(location);
+  } else {
+    cancelDotClickTimer();
+    dotClickTimer = window.setTimeout(() => marker.openPopup(), 520);
+  }
+
+  lastDotClick = { id, time: now };
+}
+
+function handleDotDoubleClick(event) {
+  const button = event.target.closest("[data-dot-location-id]");
+  if (!button) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const id = button.dataset.dotLocationId;
+  const marker = markers.get(id);
+  const location = locations.find((item) => item.id === id);
+  if (!marker || !location) return;
+
+  cancelDotClickTimer();
+  marker.closePopup();
+  openModal(location);
+}
+
+function cancelDotClickTimer() {
+  if (dotClickTimer) {
+    window.clearTimeout(dotClickTimer);
+    dotClickTimer = null;
   }
 }
 

@@ -203,6 +203,28 @@ h1 {
   z-index: 700;
 }
 
+.map-dot-marker {
+  display: grid;
+  place-items: center;
+}
+
+.map-dot-button {
+  display: block;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(17, 30, 26, 0.3);
+  cursor: pointer;
+}
+
+.map-dot-button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+
 .leaflet-control {
   position: relative;
   z-index: 800;
