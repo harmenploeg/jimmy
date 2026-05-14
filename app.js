@@ -2,6 +2,9 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
+const APP_VERSION = "3";
+
+window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
 const statusText = document.querySelector("#statusText");
 const locationList = document.querySelector("#locationList");
@@ -14,16 +17,6 @@ const modalDescription = document.querySelector("#modalDescription");
 const modalCount = document.querySelector("#modalCount");
 const prevImageButton = document.querySelector("#prevImage");
 const nextImageButton = document.querySelector("#nextImage");
-
-const markerIcon = L.icon({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
 
 let locations = [];
 let filteredLocations = [];
@@ -105,6 +98,7 @@ function loadSheetRows() {
 
     url.searchParams.set("gid", SHEET_GID);
     url.searchParams.set("headers", "1");
+    url.searchParams.set("cacheBust", `${Date.now()}`);
     url.searchParams.set("tqx", `out:json;responseHandler:${callbackName}`);
 
     window[callbackName] = (payload) => {
@@ -328,7 +322,13 @@ function renderMarkers(items, options = {}) {
   const bounds = [];
 
   items.forEach((location) => {
-    const marker = L.marker([location.lat, location.lng], { icon: markerIcon }).addTo(map);
+    const marker = L.circleMarker([location.lat, location.lng], {
+      radius: 6,
+      color: "#ffffff",
+      weight: 2,
+      fillColor: "#0d6b57",
+      fillOpacity: 1
+    }).addTo(map);
     marker.bindPopup(popupHtml(location));
     marker.on("popupopen", () => {
       const button = document.querySelector(`[data-popup-location-id="${location.id}"]`);
@@ -412,10 +412,7 @@ function popupHtml(location) {
   return `
     <button class="popup-card" type="button" data-popup-location-id="${location.id}">
       ${thumbnailHtml(location)}
-      <span>
-        <strong>${escapeHtml(location.name)}</strong>
-        <span>${escapeHtml(location.description || location.address || "Open carrousel")}</span>
-      </span>
+      <strong>${escapeHtml(location.name)}</strong>
     </button>
   `;
 }

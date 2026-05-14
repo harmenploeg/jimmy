@@ -128,8 +128,7 @@ h1 {
   outline: none;
 }
 
-.location-card img,
-.popup-card img {
+.location-card img {
   width: 68px;
   height: 58px;
   object-fit: cover;
@@ -137,8 +136,7 @@ h1 {
   background: var(--water);
 }
 
-.location-card strong,
-.popup-card strong {
+.location-card strong {
   display: block;
   margin: 3px 0 5px;
   overflow-wrap: anywhere;
@@ -147,16 +145,6 @@ h1 {
 }
 
 .location-card span,
-.popup-card span {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.3;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 .map-region,
 #map {
   min-height: 100vh;
@@ -302,19 +290,34 @@ h1 {
 }
 
 .leaflet-popup-content {
-  width: 230px;
-  margin: 10px;
+  width: 136px;
+  margin: 8px;
 }
 
 .popup-card {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
-  gap: 10px;
+  gap: 7px;
+  width: 136px;
   border: 0;
   background: transparent;
   color: var(--ink);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
+}
+
+.popup-card img {
+  width: 136px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--water);
+}
+
+.popup-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  line-height: 1.15;
 }
 
 .popup-card:focus-visible {
@@ -499,8 +502,7 @@ h1 {
     grid-template-columns: 58px minmax(0, 1fr);
   }
 
-  .location-card img,
-  .popup-card img {
+  .location-card img {
     width: 58px;
     height: 52px;
   }
