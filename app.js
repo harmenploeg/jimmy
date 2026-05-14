@@ -1,6 +1,7 @@
 const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
+const USER_LOCATION_ZOOM_OFFSET = 5;
 
 const statusText = document.querySelector("#statusText");
 const locationList = document.querySelector("#locationList");
@@ -30,6 +31,8 @@ let markers = new Map();
 let activeLocation = null;
 let activeImageIndex = 0;
 let latestBounds = null;
+let hasCenteredOnUser = false;
+let userLocationMarker = null;
 
 const map = L.map("map", {
   zoomControl: false,
@@ -44,7 +47,7 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 
-window.addEventListener("resize", () => refreshMapLayout());
+window.addEventListener("resize", () => refreshMapLayout({ fitBounds: false }));
 
 init();
 
@@ -60,6 +63,7 @@ async function init() {
     statusText.textContent = locations.length
       ? `${locations.length} locaties geladen.`
       : "Geen bruikbare locaties gevonden in de spreadsheet.";
+    centerMapOnUserLocation();
   } catch (error) {
     console.error(error);
     statusText.textContent = "De spreadsheet kon niet worden geladen. Controleer of delen via link aan staat.";
@@ -75,7 +79,7 @@ function bindEvents() {
       return haystack.includes(query);
     });
     renderLocations(filteredLocations);
-    renderMarkers(filteredLocations);
+    renderMarkers(filteredLocations, { fitToBounds: !hasCenteredOnUser });
   });
 
   document.querySelectorAll("[data-close-modal]").forEach((element) => {
@@ -315,7 +319,9 @@ function renderEmptyState(message) {
   locationList.innerHTML = `<li class="empty-state">${escapeHtml(message)}</li>`;
 }
 
-function renderMarkers(items) {
+function renderMarkers(items, options = {}) {
+  const { fitToBounds = true } = options;
+
   markers.forEach((marker) => marker.remove());
   markers = new Map();
 
@@ -334,20 +340,63 @@ function renderMarkers(items) {
 
   if (bounds.length) {
     latestBounds = L.latLngBounds(bounds);
-    refreshMapLayout();
+    refreshMapLayout({ fitBounds: fitToBounds });
   } else {
     latestBounds = null;
   }
 }
 
-function refreshMapLayout() {
+function refreshMapLayout(options = {}) {
+  const { fitBounds = true } = options;
+
   requestAnimationFrame(() => {
     map.invalidateSize();
 
-    if (latestBounds) {
+    if (fitBounds && latestBounds) {
       map.fitBounds(latestBounds, { padding: [60, 60], maxZoom: 14 });
     }
   });
+}
+
+function centerMapOnUserLocation() {
+  if (!("geolocation" in navigator)) return;
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      hasCenteredOnUser = true;
+      const userLatLng = [position.coords.latitude, position.coords.longitude];
+      const zoom = Math.min(map.getMaxZoom(), 14 + USER_LOCATION_ZOOM_OFFSET);
+
+      map.setView(userLatLng, zoom, { animate: true });
+      renderUserLocationMarker(userLatLng);
+      statusText.textContent = `${locations.length} locaties geladen. Kaart gecentreerd op je locatie.`;
+    },
+    () => {
+      statusText.textContent = locations.length
+        ? `${locations.length} locaties geladen.`
+        : "Geen bruikbare locaties gevonden in de spreadsheet.";
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 60000,
+      timeout: 10000
+    }
+  );
+}
+
+function renderUserLocationMarker(latLng) {
+  if (userLocationMarker) {
+    userLocationMarker.setLatLng(latLng);
+    return;
+  }
+
+  userLocationMarker = L.circleMarker(latLng, {
+    radius: 8,
+    color: "#ffffff",
+    weight: 3,
+    fillColor: "#0d6b57",
+    fillOpacity: 1
+  }).addTo(map);
 }
 
 function focusLocation(id) {
