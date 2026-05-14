@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "5";
+const APP_VERSION = "6";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -59,7 +59,9 @@ async function init() {
     statusText.textContent = locations.length
       ? `${locations.length} locaties geladen.`
       : "Geen bruikbare locaties gevonden in de spreadsheet.";
-    centerMapOnUserLocation();
+    if (!isMobileViewport()) {
+      centerMapOnUserLocation();
+    }
   } catch (error) {
     console.error(error);
     statusText.textContent = "De spreadsheet kon niet worden geladen. Controleer of delen via link aan staat.";
@@ -411,9 +413,19 @@ function refreshMapLayout(options = {}) {
     map.invalidateSize();
 
     if (fitBounds && latestBounds) {
-      map.fitBounds(latestBounds, { padding: [60, 60], maxZoom: 14 });
+      map.fitBounds(latestBounds, getBoundsOptions());
     }
   });
+}
+
+function getBoundsOptions() {
+  return isMobileViewport()
+    ? { paddingTopLeft: [22, 22], paddingBottomRight: [54, 76], maxZoom: 16 }
+    : { padding: [60, 60], maxZoom: 14 };
+}
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 860px)").matches;
 }
 
 function centerMapOnUserLocation() {
