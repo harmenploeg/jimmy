@@ -369,6 +369,7 @@ h1 {
   inset: 32px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   border-radius: 8px;
   background: var(--panel);
@@ -403,6 +404,7 @@ h1 {
 .carousel {
   position: relative;
   min-width: 0;
+  min-height: 0;
   background: #111816;
 }
 
@@ -422,7 +424,7 @@ h1 {
 }
 
 .carousel-figure figcaption {
-  min-height: 54px;
+  min-height: 0;
   padding: 14px 72px;
   background: #111816;
   color: #eff5f2;
@@ -524,11 +526,54 @@ h1 {
   }
 
   .modal-content {
-    padding: 20px;
+    gap: 8px;
+    padding: 14px 18px max(16px, env(safe-area-inset-bottom));
   }
 
   .carousel-figure figcaption {
-    padding: 12px 56px;
+    max-height: 22vh;
+    overflow: auto;
+    padding: 10px 56px;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 860px) and (orientation: landscape) {
+  .modal-panel {
+    inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 24vw);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .modal-content {
+    gap: 8px;
+    padding: 16px 14px;
+  }
+
+  .modal-content h2 {
+    font-size: clamp(1.2rem, 4vw, 1.7rem);
+  }
+
+  .modal-content p:last-child {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+  }
+
+  .carousel-figure figcaption {
+    max-height: 24vh;
+    padding: 8px 58px;
+    font-size: 0.88rem;
+    line-height: 1.25;
+  }
+
+  .carousel-button {
+    width: 38px;
+    height: 38px;
+    font-size: 2rem;
   }
 }
 
