@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "17.1";
+const APP_VERSION = "18.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -30,6 +30,7 @@ let selectedLocationId = "";
 const startMapZoom = 15;
 const selectedMapZoom = 18;
 const mapTransitionDuration = 0.8;
+const dotTapRadius = 22;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 let suppressMapDeselectUntil = 0;
 let lastPopupActivationAt = 0;
@@ -163,7 +164,7 @@ function handleDocumentMapClick(event) {
   if (point.x < 0 || point.y < 0 || point.x > mapRect.width || point.y > mapRect.height) return;
 
   const nearest = getNearestMarker(point);
-  if (nearest && nearest.distance <= 72) {
+  if (nearest && nearest.distance <= dotTapRadius) {
     event.preventDefault();
     event.stopPropagation();
     suppressMapDeselectUntil = Date.now() + 650;
