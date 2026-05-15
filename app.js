@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "22.2";
+const APP_VERSION = "23.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -416,7 +416,7 @@ function renderLocations(items) {
 
   locationList.innerHTML = items.map((location) => `
     <li>
-      <button class="location-card" type="button" data-location-id="${location.id}">
+      <button class="location-card" type="button" data-location-id="${location.id}" aria-pressed="${location.id === selectedLocationId ? "true" : "false"}">
         ${thumbnailHtml(location)}
         <strong>${escapeHtml(location.name)}</strong>
       </button>
@@ -426,6 +426,8 @@ function renderLocations(items) {
   locationList.querySelectorAll("[data-location-id]").forEach((button) => {
     button.addEventListener("click", () => focusLocation(button.dataset.locationId));
   });
+
+  setSelectedListItem(selectedLocationId);
 }
 
 function renderEmptyState(message) {
@@ -516,12 +518,14 @@ function selectLocation(id) {
 
   selectedLocationId = id;
   setSelectedDot(id);
+  setSelectedListItem(id, { scrollIntoView: true });
   keepSelectedDotCentered(id);
 }
 
 function deselectLocation() {
   selectedLocationId = "";
   setSelectedDot("");
+  setSelectedListItem("");
   resetToStartMap();
 }
 
@@ -532,6 +536,32 @@ function setSelectedDot(id) {
 
     element?.classList.toggle("is-selected", isSelected);
     element?.querySelector(".map-dot-button")?.classList.toggle("is-selected", isSelected);
+  });
+}
+
+function setSelectedListItem(id, options = {}) {
+  const { scrollIntoView = false } = options;
+
+  locationList.querySelectorAll("[data-location-id]").forEach((button) => {
+    const isSelected = button.dataset.locationId === id;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-pressed", String(isSelected));
+  });
+
+  if (scrollIntoView && id) {
+    scrollSelectedLocationIntoView(id);
+  }
+}
+
+function scrollSelectedLocationIntoView(id) {
+  const button = locationList.querySelector(`[data-location-id="${id}"]`);
+  const item = button?.closest("li");
+  if (!button || !item) return;
+
+  const targetTop = item.offsetTop - ((locationList.clientHeight - item.offsetHeight) / 2);
+  locationList.scrollTo({
+    top: Math.max(0, targetTop),
+    behavior: "smooth"
   });
 }
 
@@ -704,7 +734,7 @@ function focusLocation(id) {
   const marker = markers.get(id);
   if (!location || !marker) return;
 
-  map.setView([location.lat, location.lng], Math.max(map.getZoom(), 15), { animate: true });
+  selectLocation(id);
   marker.openPopup();
 }
 
