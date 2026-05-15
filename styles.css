@@ -307,8 +307,17 @@ h1 {
 }
 
 .leaflet-popup-content-wrapper {
+  border: 1px solid #aeb6b1;
   border-radius: 8px;
+  background: #ffffff;
   box-shadow: var(--shadow);
+  opacity: 1;
+}
+
+.leaflet-popup-tip {
+  border: 1px solid #aeb6b1;
+  background: #ffffff;
+  opacity: 1;
 }
 
 .leaflet-popup-content {
