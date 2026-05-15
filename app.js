@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "8";
+const APP_VERSION = "9";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -28,7 +28,6 @@ let hasCenteredOnUser = false;
 let userLocationMarker = null;
 let dotClickTimer = null;
 let lastDotClick = { id: "", time: 0 };
-let routeLayer = null;
 
 const map = L.map("map", {
   doubleClickZoom: false,
@@ -57,7 +56,6 @@ async function init() {
     filteredLocations = locations;
     renderLocations(filteredLocations);
     renderMarkers(filteredLocations);
-    renderWalkingRoute(filteredLocations);
     statusText.textContent = locations.length
       ? `${locations.length} locaties geladen.`
       : "Geen bruikbare locaties gevonden in de spreadsheet.";
@@ -80,7 +78,6 @@ function bindEvents() {
     });
     renderLocations(filteredLocations);
     renderMarkers(filteredLocations, { fitToBounds: !hasCenteredOnUser });
-    renderWalkingRoute(filteredLocations);
   });
 
   document.querySelectorAll("[data-close-modal]").forEach((element) => {
@@ -335,6 +332,7 @@ function renderMarkers(items, options = {}) {
     }).addTo(map);
     marker.bindPopup(popupHtml(location));
     marker.on("popupopen", () => {
+      focusDotMarker(marker);
       const button = document.querySelector(`[data-popup-location-id="${location.id}"]`);
       button?.addEventListener("click", () => openModal(location));
     });
@@ -379,7 +377,6 @@ function handleDotClick(event) {
     openModal(location);
   } else {
     cancelDotClickTimer();
-    focusDotMarker(marker);
     dotClickTimer = window.setTimeout(() => marker.openPopup(), 380);
   }
 
@@ -412,106 +409,10 @@ function cancelDotClickTimer() {
 
 function focusDotMarker(marker) {
   const targetZoom = Math.min(map.getMaxZoom(), map.getZoom() + 3);
-  map.setView(marker.getLatLng(), targetZoom, { animate: true });
-}
-
-async function renderWalkingRoute(items) {
-  if (routeLayer) {
-    routeLayer.remove();
-    routeLayer = null;
-  }
-
-  const routeLocations = getShortestDotOrder(items.filter(hasCoordinates));
-  if (routeLocations.length < 2) return;
-
-  const fallbackLine = routeLocations.map((location) => [location.lat, location.lng]);
-  routeLayer = createRouteLayer(fallbackLine).addTo(map);
-
-  try {
-    const walkingLine = await fetchWalkingRoute(routeLocations);
-    if (walkingLine.length > 1) {
-      routeLayer.setLatLngs(walkingLine);
-    }
-  } catch (error) {
-    console.warn("Wandelroute kon niet worden opgehaald; rechte route wordt gebruikt.", error);
-  }
-}
-
-function createRouteLayer(latLngs) {
-  return L.polyline(latLngs, {
-    color: "#d01818",
-    weight: 2,
-    opacity: 0.95,
-    lineCap: "round",
-    lineJoin: "round",
-    interactive: false
+  map.flyTo(marker.getLatLng(), targetZoom, {
+    animate: true,
+    duration: 0.35
   });
-}
-
-function getShortestDotOrder(items) {
-  if (items.length < 3) return [...items];
-
-  let bestRoute = null;
-  let bestDistance = Infinity;
-
-  items.forEach((start) => {
-    const route = [start];
-    const remaining = items.filter((item) => item.id !== start.id);
-
-    while (remaining.length) {
-      const current = route[route.length - 1];
-      let nearestIndex = 0;
-      let nearestDistance = Infinity;
-
-      remaining.forEach((candidate, index) => {
-        const distance = distanceBetween(current, candidate);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestIndex = index;
-        }
-      });
-
-      route.push(remaining.splice(nearestIndex, 1)[0]);
-    }
-
-    const distance = routeDistance(route);
-    if (distance < bestDistance) {
-      bestRoute = route;
-      bestDistance = distance;
-    }
-  });
-
-  return bestRoute || [...items];
-}
-
-function routeDistance(route) {
-  return route.slice(1).reduce((total, location, index) => total + distanceBetween(route[index], location), 0);
-}
-
-function distanceBetween(a, b) {
-  const latA = a.lat * Math.PI / 180;
-  const latB = b.lat * Math.PI / 180;
-  const dLat = (b.lat - a.lat) * Math.PI / 180;
-  const dLng = (b.lng - a.lng) * Math.PI / 180;
-  const haversine = Math.sin(dLat / 2) ** 2 + Math.cos(latA) * Math.cos(latB) * Math.sin(dLng / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-}
-
-async function fetchWalkingRoute(routeLocations) {
-  const coordinates = routeLocations.map((location) => `${location.lng},${location.lat}`).join(";");
-  const url = new URL(`https://routing.openstreetmap.de/routed-foot/route/v1/foot/${coordinates}`);
-  url.searchParams.set("overview", "full");
-  url.searchParams.set("geometries", "geojson");
-  url.searchParams.set("steps", "false");
-
-  const response = await fetch(url.toString());
-  if (!response.ok) throw new Error(`Route service gaf status ${response.status}`);
-
-  const payload = await response.json();
-  const route = payload.routes?.[0]?.geometry?.coordinates;
-  if (!route) return [];
-
-  return route.map(([lng, lat]) => [lat, lng]);
 }
 
 function refreshMapLayout(options = {}) {
