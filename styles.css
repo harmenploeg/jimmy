@@ -161,7 +161,7 @@ h1 {
 }
 
 .locate-button {
-  position: absolute;
+  position: fixed;
   left: 14px;
   bottom: 14px;
   z-index: 850;
@@ -308,7 +308,7 @@ h1 {
 
 .leaflet-top,
 .leaflet-bottom {
-  position: absolute;
+  position: fixed;
   z-index: 1000;
   pointer-events: none;
 }
@@ -576,8 +576,9 @@ h1 {
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(74vh, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     width: 100vw;
+    min-height: 100dvh;
   }
 
   .sidebar {
@@ -598,7 +599,8 @@ h1 {
   #map {
     width: 100vw;
     max-width: 100vw;
-    min-height: 74vh;
+    min-height: 74dvh;
+    height: 74dvh;
   }
 
   .leaflet-right .leaflet-control {
@@ -606,12 +608,12 @@ h1 {
   }
 
   .leaflet-bottom .leaflet-control {
-    margin-bottom: max(28px, env(safe-area-inset-bottom));
+    margin-bottom: max(18px, env(safe-area-inset-bottom));
   }
 
   .locate-button {
     left: max(14px, env(safe-area-inset-left));
-    bottom: max(28px, env(safe-area-inset-bottom));
+    bottom: max(18px, env(safe-area-inset-bottom));
   }
 
   .modal-panel {
