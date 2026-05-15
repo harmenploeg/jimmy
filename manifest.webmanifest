@@ -1,0 +1,8 @@
+{
+  "name": "Amsterdam Locaties",
+  "short_name": "Locaties",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#0d6b57"
+}
