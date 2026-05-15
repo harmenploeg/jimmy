@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "23.1";
+const APP_VERSION = "25.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -519,6 +519,7 @@ function selectLocation(id) {
   selectedLocationId = id;
   setSelectedDot(id);
   setSelectedListItem(id, { scrollIntoView: true });
+  keepSelectedListItemInView(id);
   keepSelectedDotCentered(id);
 }
 
@@ -558,11 +559,34 @@ function scrollSelectedLocationIntoView(id) {
   const item = button?.closest("li");
   if (!button || !item) return;
 
-  const targetTop = item.offsetTop - ((locationList.clientHeight - item.offsetHeight) / 2);
+  const listRect = locationList.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  const targetTop = locationList.scrollTop + itemRect.top - listRect.top - 8;
+
   locationList.scrollTo({
     top: Math.max(0, targetTop),
-    behavior: "smooth"
+    behavior: "auto"
   });
+}
+
+function keepSelectedListItemInView(id) {
+  window.requestAnimationFrame(() => {
+    if (selectedLocationId === id) {
+      scrollSelectedLocationIntoView(id);
+    }
+  });
+
+  window.setTimeout(() => {
+    if (selectedLocationId === id) {
+      scrollSelectedLocationIntoView(id);
+    }
+  }, 220);
+
+  window.setTimeout(() => {
+    if (selectedLocationId === id) {
+      scrollSelectedLocationIntoView(id);
+    }
+  }, 900);
 }
 
 function focusDotMarker(marker, options = {}) {

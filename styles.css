@@ -126,10 +126,15 @@ h1 {
 }
 
 .location-card:hover,
-.location-card:focus-visible {
+.location-card:focus-visible,
+.location-card.is-selected {
   border-color: rgba(13, 107, 87, 0.5);
   box-shadow: 0 10px 28px rgba(17, 30, 26, 0.1);
   outline: none;
+}
+
+.location-card.is-selected {
+  background: #eef6f2;
 }
 
 .location-card img {
