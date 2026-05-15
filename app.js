@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "20.1";
+const APP_VERSION = "21.2";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -17,6 +17,7 @@ const modalDescription = document.querySelector("#modalDescription");
 const modalCount = document.querySelector("#modalCount");
 const prevImageButton = document.querySelector("#prevImage");
 const nextImageButton = document.querySelector("#nextImage");
+const locateButton = document.querySelector("#locateButton");
 
 let locations = [];
 let filteredLocations = [];
@@ -35,6 +36,7 @@ const selectedDotVerticalOffsetRatio = 0.1;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 let suppressMapDeselectUntil = 0;
 let lastPopupActivationAt = 0;
+let suppressNextPopupCloseDeselect = false;
 
 const map = L.map("map", {
   attributionControl: false,
@@ -93,6 +95,7 @@ function bindEvents() {
 
   prevImageButton.addEventListener("click", () => showImage(activeImageIndex - 1));
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
+  locateButton.addEventListener("click", handleLocateButtonClick);
   document.addEventListener("pointerup", handlePopupCardActivation, true);
   document.addEventListener("click", handlePopupCardActivation, true);
   document.addEventListener("touchend", handlePopupCardActivation, true);
@@ -155,7 +158,7 @@ function handleMapClick(event) {
 }
 
 function handleDocumentMapClick(event) {
-  if (event.target.closest(".leaflet-popup, .sidebar, .modal")) return;
+  if (event.target.closest(".leaflet-popup, .sidebar, .modal, .locate-button")) return;
   const pointEvent = event.changedTouches?.[0] || event;
   if (pointEvent.clientX === undefined || pointEvent.clientY === undefined) return;
 
@@ -182,6 +185,12 @@ function handleDocumentMapClick(event) {
 
   map.closePopup();
   deselectLocation();
+}
+
+function handleLocateButtonClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  centerMapOnUserLocation({ fromButton: true });
 }
 
 function shouldSuppressMapDeselect() {
@@ -455,6 +464,11 @@ function renderMarkers(items, options = {}) {
     });
     marker.on("popupclose", () => {
       window.setTimeout(() => {
+        if (suppressNextPopupCloseDeselect) {
+          suppressNextPopupCloseDeselect = false;
+          return;
+        }
+
         if (!document.querySelector(".popup-card[data-popup-location-id]")) {
           deselectLocation();
         }
@@ -614,30 +628,60 @@ function isMobileViewport() {
   return window.matchMedia("(max-width: 860px)").matches;
 }
 
-function centerMapOnUserLocation() {
-  if (!("geolocation" in navigator)) return;
+function centerMapOnUserLocation(options = {}) {
+  const { fromButton = false } = options;
+
+  if (!("geolocation" in navigator)) {
+    if (fromButton) {
+      statusText.textContent = "Locatiebepaling wordt niet ondersteund door deze browser.";
+    }
+    return;
+  }
+
+  if (fromButton) {
+    locateButton.disabled = true;
+    locateButton.classList.add("is-loading");
+    locateButton.setAttribute("aria-busy", "true");
+  }
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
       hasCenteredOnUser = true;
       const userLatLng = [position.coords.latitude, position.coords.longitude];
-      const zoom = Math.min(map.getMaxZoom(), 14 + USER_LOCATION_ZOOM_OFFSET);
+      const zoom = fromButton
+        ? Math.min(map.getMaxZoom(), selectedMapZoom)
+        : Math.min(map.getMaxZoom(), 14 + USER_LOCATION_ZOOM_OFFSET);
 
-      map.setView(userLatLng, zoom, { animate: true });
+      suppressNextPopupCloseDeselect = true;
+      map.closePopup();
+      selectedLocationId = "";
+      setSelectedDot("");
+      moveMap(userLatLng, zoom, true);
       renderUserLocationMarker(userLatLng);
       statusText.textContent = `${locations.length} locaties geladen. Kaart gecentreerd op je locatie.`;
+      finishLocateButton();
     },
     () => {
       statusText.textContent = locations.length
         ? `${locations.length} locaties geladen.`
         : "Geen bruikbare locaties gevonden in de spreadsheet.";
+      if (fromButton) {
+        statusText.textContent = "Je actuele locatie kon niet worden bepaald.";
+      }
+      finishLocateButton();
     },
     {
       enableHighAccuracy: true,
-      maximumAge: 60000,
+      maximumAge: fromButton ? 0 : 60000,
       timeout: 10000
     }
   );
+}
+
+function finishLocateButton() {
+  locateButton.disabled = false;
+  locateButton.classList.remove("is-loading");
+  locateButton.removeAttribute("aria-busy");
 }
 
 function renderUserLocationMarker(latLng) {
