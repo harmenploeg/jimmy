@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "13.7";
+const APP_VERSION = "15";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -27,7 +27,7 @@ let latestBounds = null;
 let hasCenteredOnUser = false;
 let userLocationMarker = null;
 let selectedLocationId = "";
-const startMapZoom = 12;
+const startMapZoom = 15;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 
 const map = L.map("map", {
@@ -473,7 +473,7 @@ function setSelectedDot(id) {
 }
 
 function focusDotMarker(marker) {
-  const targetZoom = 15;
+  const targetZoom = 18;
   map.setView(marker.getLatLng(), targetZoom, { animate: false });
 }
 
