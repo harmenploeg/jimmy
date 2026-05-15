@@ -321,14 +321,14 @@ h1 {
 }
 
 .leaflet-popup-content {
-  width: 136px;
+  width: 160px;
   margin: 8px;
 }
 
 .popup-card {
   display: grid;
   gap: 7px;
-  width: 136px;
+  width: 160px;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -337,6 +337,7 @@ h1 {
 }
 
 .popup-card img {
+  justify-self: center;
   width: 136px;
   height: 92px;
   object-fit: cover;
