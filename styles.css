@@ -206,18 +206,37 @@ h1 {
 .map-dot-marker {
   display: grid;
   place-items: center;
+  cursor: pointer;
 }
 
 .map-dot-button {
   display: block;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.map-dot-button::after {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  display: block;
   width: 12px;
   height: 12px;
-  padding: 0;
   border: 2px solid #ffffff;
   border-radius: 999px;
   background: var(--accent);
   box-shadow: 0 2px 8px rgba(17, 30, 26, 0.3);
-  cursor: pointer;
+  content: "";
+}
+
+.map-dot-marker.is-selected .map-dot-button::after,
+.map-dot-button.is-selected::after {
+  background: #d01818;
 }
 
 .map-dot-button:focus-visible {

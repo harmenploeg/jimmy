@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "12";
+const APP_VERSION = "13.7";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -26,11 +26,8 @@ let activeImageIndex = 0;
 let latestBounds = null;
 let hasCenteredOnUser = false;
 let userLocationMarker = null;
-let dotClickTimer = null;
-let lastDotClick = { id: "", time: 0 };
-let suppressNextPopupReset = false;
-let focusedPopupId = "";
-let startMapZoom = 12;
+let selectedLocationId = "";
+const startMapZoom = 12;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 
 const map = L.map("map", {
@@ -90,12 +87,8 @@ function bindEvents() {
 
   prevImageButton.addEventListener("click", () => showImage(activeImageIndex - 1));
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
-  map.getContainer().addEventListener("click", handleDotClick, true);
-  map.getContainer().addEventListener("dblclick", handleDotDoubleClick, true);
-  map.getContainer().addEventListener("click", handleMapBackgroundClick);
-  map.on("popupopen", handleMapPopupOpen);
-  observePopupPane();
-  startPopupWatcher();
+  map.getContainer().addEventListener("click", handleMapClick, true);
+  document.addEventListener("click", handleDocumentMapClick, true);
 
   document.addEventListener("keydown", (event) => {
     if (!modal.classList.contains("is-open")) return;
@@ -103,6 +96,64 @@ function bindEvents() {
     if (event.key === "ArrowLeft") showImage(activeImageIndex - 1);
     if (event.key === "ArrowRight") showImage(activeImageIndex + 1);
   });
+}
+
+function handleMapClick(event) {
+  const dot = event.target.closest("[data-dot-location-id], .map-dot-marker");
+  if (dot) {
+    const id = dot.dataset.dotLocationId;
+    const marker = markers.get(id);
+
+    if (marker) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectLocation(id);
+      marker.openPopup();
+    }
+
+    return;
+  }
+
+  if (event.target.closest(".leaflet-popup")) return;
+
+  map.closePopup();
+  deselectLocation();
+}
+
+function handleDocumentMapClick(event) {
+  if (event.target.closest(".leaflet-popup, .sidebar, .modal")) return;
+
+  const mapRect = map.getContainer().getBoundingClientRect();
+  const point = L.point(event.clientX - mapRect.left, event.clientY - mapRect.top);
+
+  if (point.x < 0 || point.y < 0 || point.x > mapRect.width || point.y > mapRect.height) return;
+
+  const nearest = getNearestMarker(point);
+  if (nearest && nearest.distance <= 28) {
+    event.preventDefault();
+    event.stopPropagation();
+    selectLocation(nearest.id);
+    nearest.marker.openPopup();
+    return;
+  }
+
+  map.closePopup();
+  deselectLocation();
+}
+
+function getNearestMarker(point) {
+  let nearest = null;
+
+  markers.forEach((marker, id) => {
+    const markerPoint = map.latLngToContainerPoint(marker.getLatLng());
+    const distance = point.distanceTo(markerPoint);
+
+    if (!nearest || distance < nearest.distance) {
+      nearest = { id, marker, distance };
+    }
+  });
+
+  return nearest;
 }
 
 function loadSheetRows() {
@@ -341,39 +392,24 @@ function renderMarkers(items, options = {}) {
     marker.locationId = location.id;
     const markerElement = marker.getElement();
     markerElement?.setAttribute("data-dot-location-id", location.id);
-    markerElement?.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      handleDotActivation(marker, location, event.detail >= 2);
-    }, true);
-    markerElement?.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      handleDotActivation(marker, location, true);
-    }, true);
+    markerElement?.addEventListener("click", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("pointerup", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("touchend", (event) => activateMarker(event, location.id), true);
     marker.bindPopup(popupHtml(location), {
       autoPan: false,
       closeOnClick: true
     });
-    marker.on("click", () => {
-      focusDotMarker(marker);
-      window.setTimeout(() => marker.openPopup(), 120);
-    });
+    marker.on("click", () => selectLocation(location.id));
     marker.on("popupopen", () => {
+      selectLocation(location.id);
       const button = document.querySelector(`[data-popup-location-id="${location.id}"]`);
       button?.addEventListener("click", () => openModal(location));
     });
     marker.on("popupclose", () => {
-      if (suppressNextPopupReset) {
-        suppressNextPopupReset = false;
-        return;
-      }
-
       window.setTimeout(() => {
-        if (document.querySelector(".popup-card[data-popup-location-id]")) return;
-
-        focusedPopupId = "";
-        resetToStartMap();
+        if (!document.querySelector(".popup-card[data-popup-location-id]")) {
+          deselectLocation();
+        }
       }, 0);
     });
     markers.set(location.id, marker);
@@ -398,134 +434,47 @@ function createDotIcon(location) {
   });
 }
 
-function handleDotClick(event) {
-  const button = event.target.closest("[data-dot-location-id], .map-dot-marker");
-  if (!button) return;
+function activateMarker(event, id) {
+  const marker = markers.get(id);
+  if (!marker) return;
 
   event.preventDefault();
   event.stopPropagation();
-
-  const id = button.dataset.dotLocationId;
-  const marker = markers.get(id);
-  const location = locations.find((item) => item.id === id);
-  if (!marker || !location) return;
-
-  const now = Date.now();
-  if (event.detail >= 2 || (lastDotClick.id === id && now - lastDotClick.time < 700)) {
-    cancelDotClickTimer();
-    suppressNextPopupReset = true;
-    marker.closePopup();
-    openModal(location);
-  } else {
-    cancelDotClickTimer();
-    handleDotActivation(marker, location, false);
-  }
-
-  lastDotClick = { id, time: now };
+  selectLocation(id);
+  marker.openPopup();
 }
 
-function handleMapBackgroundClick(event) {
-  if (event.target.closest("[data-dot-location-id], .map-dot-marker, .leaflet-popup")) return;
+function selectLocation(id) {
+  if (selectedLocationId === id) return;
 
-  focusedPopupId = "";
-  map.closePopup();
-  resetToStartMap();
-}
-
-function handleDotDoubleClick(event) {
-  const button = event.target.closest("[data-dot-location-id], .map-dot-marker");
-  if (!button) return;
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  const id = button.dataset.dotLocationId;
-  const marker = markers.get(id);
-  const location = locations.find((item) => item.id === id);
-  if (!marker || !location) return;
-
-  cancelDotClickTimer();
-  suppressNextPopupReset = true;
-  marker.closePopup();
-  openModal(location);
-}
-
-function cancelDotClickTimer() {
-  if (dotClickTimer) {
-    window.clearTimeout(dotClickTimer);
-    dotClickTimer = null;
-  }
-}
-
-function handleDotActivation(marker, location, openCarouselImmediately) {
-  cancelDotClickTimer();
-
-  if (openCarouselImmediately) {
-    suppressNextPopupReset = true;
-    marker.closePopup();
-    openModal(location);
-    return;
-  }
-
-  focusDotMarker(marker);
-  dotClickTimer = window.setTimeout(() => marker.openPopup(), 120);
-}
-
-function handleMapPopupOpen(event) {
-  const marker = event.popup?._source;
-  if (!marker?.locationId) return;
-
-  focusPopupMarker(marker.locationId);
-}
-
-function observePopupPane() {
-  const popupPane = map.getPanes().popupPane;
-  if (!popupPane) return;
-
-  const observer = new MutationObserver(() => {
-    const popupButton = popupPane.querySelector("[data-popup-location-id]");
-    const id = popupButton?.dataset.popupLocationId;
-    if (id) focusPopupMarker(id);
-  });
-
-  observer.observe(popupPane, {
-    childList: true,
-    subtree: true
-  });
-}
-
-function startPopupWatcher() {
-  window.setInterval(() => {
-    const popupButton = document.querySelector(".popup-card[data-popup-location-id]");
-    const id = popupButton?.dataset.popupLocationId;
-
-    if (id) {
-      focusPopupMarker(id);
-    } else if (focusedPopupId) {
-      focusedPopupId = "";
-      resetToStartMap();
-    }
-  }, 150);
-}
-
-function focusPopupMarker(id) {
-  if (focusedPopupId === id) return;
+  setSelectedDot(id);
 
   const marker = markers.get(id);
   if (!marker) return;
 
-  focusedPopupId = id;
+  selectedLocationId = id;
   focusDotMarker(marker);
 }
 
-function focusDotMarker(marker) {
-  const targetZoom = Math.min(map.getMaxZoom(), startMapZoom + 3);
-  const markerPoint = map.project(marker.getLatLng(), targetZoom);
-  const verticalOffset = map.getSize().y * 0.1;
-  const centerPoint = markerPoint.add([0, verticalOffset]);
-  const centerLatLng = map.unproject(centerPoint, targetZoom);
+function deselectLocation() {
+  selectedLocationId = "";
+  setSelectedDot("");
+  resetToStartMap();
+}
 
-  map.setView(centerLatLng, targetZoom, { animate: false });
+function setSelectedDot(id) {
+  markers.forEach((marker, markerId) => {
+    const element = marker.getElement();
+    const isSelected = markerId === id;
+
+    element?.classList.toggle("is-selected", isSelected);
+    element?.querySelector(".map-dot-button")?.classList.toggle("is-selected", isSelected);
+  });
+}
+
+function focusDotMarker(marker) {
+  const targetZoom = 15;
+  map.setView(marker.getLatLng(), targetZoom, { animate: false });
 }
 
 function resetToStartMap() {
@@ -539,9 +488,8 @@ function refreshMapLayout(options = {}) {
     map.invalidateSize();
 
     if (fitBounds && latestBounds) {
-      map.fitBounds(latestBounds, getBoundsOptions());
-      startMapZoom = map.getZoom();
-      startMapCenter = map.getCenter();
+      startMapCenter = latestBounds.getCenter();
+      resetToStartMap();
     }
   });
 }
