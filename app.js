@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "16.1";
+const APP_VERSION = "17.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -32,6 +32,7 @@ const selectedMapZoom = 18;
 const mapTransitionDuration = 0.8;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 let suppressMapDeselectUntil = 0;
+let lastPopupActivationAt = 0;
 
 const map = L.map("map", {
   doubleClickZoom: false,
@@ -90,6 +91,9 @@ function bindEvents() {
 
   prevImageButton.addEventListener("click", () => showImage(activeImageIndex - 1));
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
+  document.addEventListener("pointerup", handlePopupCardActivation, true);
+  document.addEventListener("click", handlePopupCardActivation, true);
+  document.addEventListener("touchend", handlePopupCardActivation, true);
   map.getContainer().addEventListener("click", handleMapClick, true);
   document.addEventListener("click", handleDocumentMapClick, true);
   document.addEventListener("pointerup", handleDocumentMapClick, true);
@@ -101,6 +105,23 @@ function bindEvents() {
     if (event.key === "ArrowLeft") showImage(activeImageIndex - 1);
     if (event.key === "ArrowRight") showImage(activeImageIndex + 1);
   });
+}
+
+function handlePopupCardActivation(event) {
+  const popupCard = event.target.closest(".popup-card[data-popup-location-id]");
+  if (!popupCard) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const now = Date.now();
+  if (now - lastPopupActivationAt < 450) return;
+  lastPopupActivationAt = now;
+
+  const location = locations.find((item) => item.id === popupCard.dataset.popupLocationId);
+  if (location) {
+    openModal(location);
+  }
 }
 
 function handleMapClick(event) {
@@ -428,8 +449,6 @@ function renderMarkers(items, options = {}) {
     marker.on("click", () => selectLocation(location.id));
     marker.on("popupopen", () => {
       window.setTimeout(() => selectLocation(location.id), 0);
-      const button = document.querySelector(`[data-popup-location-id="${location.id}"]`);
-      button?.addEventListener("click", () => openModal(location));
     });
     marker.on("popupclose", () => {
       window.setTimeout(() => {
