@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "18.1";
+const APP_VERSION = "19.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -36,6 +36,7 @@ let suppressMapDeselectUntil = 0;
 let lastPopupActivationAt = 0;
 
 const map = L.map("map", {
+  attributionControl: false,
   doubleClickZoom: false,
   zoomControl: false,
   scrollWheelZoom: true
@@ -45,8 +46,7 @@ L.control.zoom({ position: "bottomright" }).addTo(map);
 
 L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
   subdomains: "abcd",
-  maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  maxZoom: 19
 }).addTo(map);
 
 window.addEventListener("resize", () => refreshMapLayout({ fitBounds: false, keepCurrentView: true }));
