@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "26.1";
+const APP_VERSION = "27.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -34,7 +34,7 @@ const startMapZoom = 15;
 const selectedMapZoom = 18;
 const mapTransitionDuration = 0.8;
 const dotTapRadius = 22;
-const selectedDotVerticalOffsetRatio = 0.1;
+const mapVerticalOffsetRatio = 0.1;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 let suppressMapDeselectUntil = 0;
 let lastPopupActivationAt = 0;
@@ -635,7 +635,7 @@ function focusDotMarker(marker, options = {}) {
   selectedLocationId = marker.locationId || selectedLocationId;
   syncMapContainerSize();
   map.invalidateSize();
-  moveMap(getSelectedDotMapCenter(marker.getLatLng()), selectedMapZoom, animate);
+  moveMap(getOffsetMapCenter(marker.getLatLng(), selectedMapZoom), selectedMapZoom, animate);
 }
 
 function keepSelectedDotCentered(id) {
@@ -654,7 +654,7 @@ function keepSelectedDotCentered(id) {
 function resetToStartMap() {
   syncMapContainerSize();
   map.invalidateSize();
-  startMapCenter = getAllDotsCenter();
+  startMapCenter = getOffsetMapCenter(getAllDotsCenter(), startMapZoom);
   moveMap(startMapCenter, startMapZoom, true);
 }
 
@@ -693,11 +693,11 @@ function moveMap(center, zoom, animate) {
   map.setView(center, zoom, { animate: false });
 }
 
-function getSelectedDotMapCenter(latLng) {
-  const projectedPoint = map.project(latLng, selectedMapZoom);
-  const yOffset = map.getSize().y * selectedDotVerticalOffsetRatio;
+function getOffsetMapCenter(latLng, zoom) {
+  const projectedPoint = map.project(latLng, zoom);
+  const yOffset = map.getSize().y * mapVerticalOffsetRatio;
 
-  return map.unproject(projectedPoint.add([0, yOffset]), selectedMapZoom);
+  return map.unproject(projectedPoint.add([0, yOffset]), zoom);
 }
 
 function refreshMapLayout(options = {}) {
