@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "15";
+const APP_VERSION = "16.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -28,7 +28,10 @@ let hasCenteredOnUser = false;
 let userLocationMarker = null;
 let selectedLocationId = "";
 const startMapZoom = 15;
+const selectedMapZoom = 18;
+const mapTransitionDuration = 0.8;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
+let suppressMapDeselectUntil = 0;
 
 const map = L.map("map", {
   doubleClickZoom: false,
@@ -44,7 +47,7 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 
-window.addEventListener("resize", () => refreshMapLayout({ fitBounds: false }));
+window.addEventListener("resize", () => refreshMapLayout({ fitBounds: false, keepCurrentView: true }));
 
 init();
 
@@ -89,6 +92,8 @@ function bindEvents() {
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
   map.getContainer().addEventListener("click", handleMapClick, true);
   document.addEventListener("click", handleDocumentMapClick, true);
+  document.addEventListener("pointerup", handleDocumentMapClick, true);
+  document.addEventListener("touchend", handleDocumentMapClick, true);
 
   document.addEventListener("keydown", (event) => {
     if (!modal.classList.contains("is-open")) return;
@@ -99,6 +104,12 @@ function bindEvents() {
 }
 
 function handleMapClick(event) {
+  if (shouldSuppressMapDeselect()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
   const dot = event.target.closest("[data-dot-location-id], .map-dot-marker");
   if (dot) {
     const id = dot.dataset.dotLocationId;
@@ -122,23 +133,36 @@ function handleMapClick(event) {
 
 function handleDocumentMapClick(event) {
   if (event.target.closest(".leaflet-popup, .sidebar, .modal")) return;
+  const pointEvent = event.changedTouches?.[0] || event;
+  if (pointEvent.clientX === undefined || pointEvent.clientY === undefined) return;
 
   const mapRect = map.getContainer().getBoundingClientRect();
-  const point = L.point(event.clientX - mapRect.left, event.clientY - mapRect.top);
+  const point = L.point(pointEvent.clientX - mapRect.left, pointEvent.clientY - mapRect.top);
 
   if (point.x < 0 || point.y < 0 || point.x > mapRect.width || point.y > mapRect.height) return;
 
   const nearest = getNearestMarker(point);
-  if (nearest && nearest.distance <= 28) {
+  if (nearest && nearest.distance <= 72) {
     event.preventDefault();
     event.stopPropagation();
+    suppressMapDeselectUntil = Date.now() + 650;
     selectLocation(nearest.id);
     nearest.marker.openPopup();
     return;
   }
 
+  if (shouldSuppressMapDeselect()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
   map.closePopup();
   deselectLocation();
+}
+
+function shouldSuppressMapDeselect() {
+  return selectedLocationId && Date.now() < suppressMapDeselectUntil;
 }
 
 function getNearestMarker(point) {
@@ -392,8 +416,10 @@ function renderMarkers(items, options = {}) {
     marker.locationId = location.id;
     const markerElement = marker.getElement();
     markerElement?.setAttribute("data-dot-location-id", location.id);
+    markerElement?.addEventListener("pointerdown", (event) => activateMarker(event, location.id), true);
     markerElement?.addEventListener("click", (event) => activateMarker(event, location.id), true);
     markerElement?.addEventListener("pointerup", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("touchstart", (event) => activateMarker(event, location.id), true);
     markerElement?.addEventListener("touchend", (event) => activateMarker(event, location.id), true);
     marker.bindPopup(popupHtml(location), {
       autoPan: false,
@@ -401,7 +427,7 @@ function renderMarkers(items, options = {}) {
     });
     marker.on("click", () => selectLocation(location.id));
     marker.on("popupopen", () => {
-      selectLocation(location.id);
+      window.setTimeout(() => selectLocation(location.id), 0);
       const button = document.querySelector(`[data-popup-location-id="${location.id}"]`);
       button?.addEventListener("click", () => openModal(location));
     });
@@ -418,7 +444,10 @@ function renderMarkers(items, options = {}) {
 
   if (bounds.length) {
     latestBounds = L.latLngBounds(bounds);
-    refreshMapLayout({ fitBounds: fitToBounds });
+    startMapCenter = getAllDotsCenter();
+    if (fitToBounds) {
+      resetToStartMap();
+    }
   } else {
     latestBounds = null;
   }
@@ -440,20 +469,18 @@ function activateMarker(event, id) {
 
   event.preventDefault();
   event.stopPropagation();
+  suppressMapDeselectUntil = Date.now() + 650;
   selectLocation(id);
   marker.openPopup();
 }
 
 function selectLocation(id) {
-  if (selectedLocationId === id) return;
-
-  setSelectedDot(id);
-
   const marker = markers.get(id);
   if (!marker) return;
 
   selectedLocationId = id;
-  focusDotMarker(marker);
+  setSelectedDot(id);
+  keepSelectedDotCentered(id);
 }
 
 function deselectLocation() {
@@ -472,32 +499,86 @@ function setSelectedDot(id) {
   });
 }
 
-function focusDotMarker(marker) {
-  const targetZoom = 18;
-  map.setView(marker.getLatLng(), targetZoom, { animate: false });
+function focusDotMarker(marker, options = {}) {
+  const { animate = true } = options;
+  selectedLocationId = marker.locationId || selectedLocationId;
+  syncMapContainerSize();
+  map.invalidateSize();
+  moveMap(marker.getLatLng(), selectedMapZoom, animate);
+}
+
+function keepSelectedDotCentered(id) {
+  const marker = markers.get(id);
+  if (!marker) return;
+
+  focusDotMarker(marker, { animate: true });
+
+  window.setTimeout(() => {
+    if (selectedLocationId === id) {
+      focusDotMarker(marker, { animate: false });
+    }
+  }, (mapTransitionDuration * 1000) + 180);
 }
 
 function resetToStartMap() {
-  map.setView(startMapCenter, startMapZoom, { animate: true });
+  syncMapContainerSize();
+  map.invalidateSize();
+  startMapCenter = getAllDotsCenter();
+  moveMap(startMapCenter, startMapZoom, true);
+}
+
+function moveMap(center, zoom, animate) {
+  if (animate) {
+    map.flyTo(center, zoom, {
+      animate: true,
+      duration: mapTransitionDuration,
+      easeLinearity: 0.25,
+      noMoveStart: true
+    });
+    return;
+  }
+
+  map.setView(center, zoom, { animate: false });
 }
 
 function refreshMapLayout(options = {}) {
-  const { fitBounds = true } = options;
+  const { fitBounds = true, keepCurrentView = false } = options;
 
   requestAnimationFrame(() => {
+    syncMapContainerSize();
     map.invalidateSize();
 
-    if (fitBounds && latestBounds) {
-      startMapCenter = latestBounds.getCenter();
+    if (selectedLocationId) {
+      const marker = markers.get(selectedLocationId);
+      if (marker) {
+        focusDotMarker(marker);
+      }
+      return;
+    }
+
+    if (fitBounds && latestBounds && !keepCurrentView) {
       resetToStartMap();
     }
   });
 }
 
-function getBoundsOptions() {
-  return isMobileViewport()
-    ? { paddingTopLeft: [22, 22], paddingBottomRight: [54, 76], maxZoom: 16 }
-    : { padding: [60, 60], maxZoom: 14 };
+function syncMapContainerSize() {
+  const mapElement = map.getContainer();
+  const region = document.querySelector(".map-region");
+
+  if (!isMobileViewport()) {
+    mapElement.style.width = "";
+    region.style.width = "";
+    return;
+  }
+
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  mapElement.style.width = `${viewportWidth}px`;
+  region.style.width = `${viewportWidth}px`;
+}
+
+function getAllDotsCenter() {
+  return latestBounds ? latestBounds.getCenter() : L.latLng(AMSTERDAM_CENTER);
 }
 
 function isMobileViewport() {
