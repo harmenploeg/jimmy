@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "11.11";
+const APP_VERSION = "12";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -520,7 +520,12 @@ function focusPopupMarker(id) {
 
 function focusDotMarker(marker) {
   const targetZoom = Math.min(map.getMaxZoom(), startMapZoom + 3);
-  map.setView(marker.getLatLng(), targetZoom, { animate: false });
+  const markerPoint = map.project(marker.getLatLng(), targetZoom);
+  const verticalOffset = map.getSize().y * 0.1;
+  const centerPoint = markerPoint.add([0, verticalOffset]);
+  const centerLatLng = map.unproject(centerPoint, targetZoom);
+
+  map.setView(centerLatLng, targetZoom, { animate: false });
 }
 
 function resetToStartMap() {
