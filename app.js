@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "25.1";
+const APP_VERSION = "26.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -18,6 +18,8 @@ const modalCount = document.querySelector("#modalCount");
 const prevImageButton = document.querySelector("#prevImage");
 const nextImageButton = document.querySelector("#nextImage");
 const locateButton = document.querySelector("#locateButton");
+const resetMapButton = document.querySelector("#resetMapButton");
+const carouselFigure = document.querySelector(".carousel-figure");
 
 let locations = [];
 let filteredLocations = [];
@@ -37,6 +39,7 @@ let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 let suppressMapDeselectUntil = 0;
 let lastPopupActivationAt = 0;
 let suppressNextPopupCloseDeselect = false;
+let carouselTouchStartX = null;
 
 const map = L.map("map", {
   attributionControl: false,
@@ -68,9 +71,7 @@ async function init() {
     statusText.textContent = locations.length
       ? `${locations.length} locaties geladen.`
       : "Geen bruikbare locaties gevonden in de spreadsheet.";
-    if (!isMobileViewport()) {
-      centerMapOnUserLocation();
-    }
+    applyInitialLocationFromUrl();
   } catch (error) {
     console.error(error);
     statusText.textContent = "De spreadsheet kon niet worden geladen. Controleer of delen via link aan staat.";
@@ -96,6 +97,9 @@ function bindEvents() {
   prevImageButton.addEventListener("click", () => showImage(activeImageIndex - 1));
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
   locateButton.addEventListener("click", handleLocateButtonClick);
+  resetMapButton.addEventListener("click", handleResetMapButtonClick);
+  carouselFigure.addEventListener("touchstart", handleCarouselTouchStart, { passive: true });
+  carouselFigure.addEventListener("touchend", handleCarouselTouchEnd);
   document.addEventListener("pointerup", handlePopupCardActivation, true);
   document.addEventListener("click", handlePopupCardActivation, true);
   document.addEventListener("touchend", handlePopupCardActivation, true);
@@ -144,8 +148,7 @@ function handleMapClick(event) {
     if (marker) {
       event.preventDefault();
       event.stopPropagation();
-      selectLocation(id);
-      marker.openPopup();
+      setActiveLocation(id, { openPopup: true, updateUrl: true });
     }
 
     return;
@@ -153,12 +156,11 @@ function handleMapClick(event) {
 
   if (event.target.closest(".leaflet-popup")) return;
 
-  map.closePopup();
-  deselectLocation();
+  clearActiveLocation({ updateUrl: true });
 }
 
 function handleDocumentMapClick(event) {
-  if (event.target.closest(".leaflet-popup, .sidebar, .modal, .locate-button")) return;
+  if (event.target.closest(".leaflet-popup, .sidebar, .modal, .map-action-bar")) return;
   const pointEvent = event.changedTouches?.[0] || event;
   if (pointEvent.clientX === undefined || pointEvent.clientY === undefined) return;
 
@@ -172,8 +174,7 @@ function handleDocumentMapClick(event) {
     event.preventDefault();
     event.stopPropagation();
     suppressMapDeselectUntil = Date.now() + 650;
-    selectLocation(nearest.id);
-    nearest.marker.openPopup();
+    setActiveLocation(nearest.id, { openPopup: true, updateUrl: true });
     return;
   }
 
@@ -183,14 +184,36 @@ function handleDocumentMapClick(event) {
     return;
   }
 
-  map.closePopup();
-  deselectLocation();
+  clearActiveLocation({ updateUrl: true });
 }
 
 function handleLocateButtonClick(event) {
   event.preventDefault();
   event.stopPropagation();
   centerMapOnUserLocation({ fromButton: true });
+}
+
+function handleResetMapButtonClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  clearActiveLocation({ updateUrl: true });
+}
+
+function handleCarouselTouchStart(event) {
+  carouselTouchStartX = event.changedTouches?.[0]?.clientX ?? null;
+}
+
+function handleCarouselTouchEnd(event) {
+  if (carouselTouchStartX === null) return;
+
+  const endX = event.changedTouches?.[0]?.clientX;
+  if (endX === undefined) return;
+
+  const delta = endX - carouselTouchStartX;
+  carouselTouchStartX = null;
+
+  if (Math.abs(delta) < 44) return;
+  showImage(delta < 0 ? activeImageIndex + 1 : activeImageIndex - 1);
 }
 
 function shouldSuppressMapDeselect() {
@@ -460,9 +483,9 @@ function renderMarkers(items, options = {}) {
       closeButton: false,
       closeOnClick: true
     });
-    marker.on("click", () => selectLocation(location.id));
+    marker.on("click", () => setActiveLocation(location.id));
     marker.on("popupopen", () => {
-      window.setTimeout(() => selectLocation(location.id), 0);
+      window.setTimeout(() => setActiveLocation(location.id), 0);
     });
     marker.on("popupclose", () => {
       window.setTimeout(() => {
@@ -472,7 +495,7 @@ function renderMarkers(items, options = {}) {
         }
 
         if (!document.querySelector(".popup-card[data-popup-location-id]")) {
-          deselectLocation();
+          clearActiveLocation({ updateUrl: true });
         }
       }, 0);
     });
@@ -508,26 +531,44 @@ function activateMarker(event, id) {
   event.preventDefault();
   event.stopPropagation();
   suppressMapDeselectUntil = Date.now() + 650;
-  selectLocation(id);
-  marker.openPopup();
+  setActiveLocation(id, { openPopup: true, updateUrl: true });
 }
 
-function selectLocation(id) {
+function setActiveLocation(id, options = {}) {
+  const { openPopup = false, updateUrl = false, scrollList = true } = options;
   const marker = markers.get(id);
   if (!marker) return;
 
   selectedLocationId = id;
   setSelectedDot(id);
-  setSelectedListItem(id, { scrollIntoView: true });
+  setSelectedListItem(id, { scrollIntoView: scrollList });
   keepSelectedListItemInView(id);
   keepSelectedDotCentered(id);
+  if (openPopup) marker.openPopup();
+  if (updateUrl) updateLocationUrl(id);
 }
 
-function deselectLocation() {
+function clearActiveLocation(options = {}) {
+  const { updateUrl = false, resetMap = true, closePopup = true } = options;
+
+  if (closePopup) {
+    suppressNextPopupCloseDeselect = true;
+    map.closePopup();
+  }
+
   selectedLocationId = "";
   setSelectedDot("");
   setSelectedListItem("");
-  resetToStartMap();
+  if (resetMap) resetToStartMap();
+  if (updateUrl) updateLocationUrl("");
+}
+
+function selectLocation(id) {
+  setActiveLocation(id);
+}
+
+function deselectLocation() {
+  clearActiveLocation();
 }
 
 function setSelectedDot(id) {
@@ -615,6 +656,27 @@ function resetToStartMap() {
   map.invalidateSize();
   startMapCenter = getAllDotsCenter();
   moveMap(startMapCenter, startMapZoom, true);
+}
+
+function applyInitialLocationFromUrl() {
+  const id = new URLSearchParams(window.location.search).get("locatie");
+  if (!id || !markers.has(id)) return;
+
+  window.setTimeout(() => {
+    setActiveLocation(id, { openPopup: true, scrollList: true });
+  }, 250);
+}
+
+function updateLocationUrl(id) {
+  const url = new URL(window.location.href);
+
+  if (id) {
+    url.searchParams.set("locatie", id);
+  } else {
+    url.searchParams.delete("locatie");
+  }
+
+  window.history.replaceState({}, "", url.toString());
 }
 
 function moveMap(center, zoom, animate) {
@@ -706,10 +768,7 @@ function centerMapOnUserLocation(options = {}) {
         ? Math.min(map.getMaxZoom(), selectedMapZoom)
         : Math.min(map.getMaxZoom(), 14 + USER_LOCATION_ZOOM_OFFSET);
 
-      suppressNextPopupCloseDeselect = true;
-      map.closePopup();
-      selectedLocationId = "";
-      setSelectedDot("");
+      clearActiveLocation({ updateUrl: true, resetMap: false });
       moveMap(userLatLng, zoom, true);
       renderUserLocationMarker(userLatLng);
       statusText.textContent = `${locations.length} locaties geladen. Kaart gecentreerd op je locatie.`;
@@ -758,8 +817,7 @@ function focusLocation(id) {
   const marker = markers.get(id);
   if (!location || !marker) return;
 
-  selectLocation(id);
-  marker.openPopup();
+  setActiveLocation(id, { openPopup: true, updateUrl: true, scrollList: false });
 }
 
 function popupHtml(location) {
@@ -813,6 +871,18 @@ function showImage(index) {
   modalCount.textContent = `${activeImageIndex + 1} van ${images.length}`;
   prevImageButton.disabled = images.length < 2;
   nextImageButton.disabled = images.length < 2;
+  preloadAdjacentImages(images);
+}
+
+function preloadAdjacentImages(images) {
+  if (images.length < 2) return;
+
+  [activeImageIndex - 1, activeImageIndex + 1].forEach((index) => {
+    const image = images[(index + images.length) % images.length];
+    if (!image?.url) return;
+    const preload = new Image();
+    preload.src = image.url;
+  });
 }
 
 function escapeHtml(value) {

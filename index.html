@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d6b57">
     <title>Amsterdam Locaties</title>
+    <link rel="manifest" href="manifest.webmanifest">
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
     <link
@@ -12,7 +14,7 @@
       integrity="sha256-p4NxAoJBhIINfQfuo2x6bgnC+y8ClnZL4EQPLxQm7Ig="
       crossorigin=""
     >
-    <link rel="stylesheet" href="styles.css?v=25.1">
+    <link rel="stylesheet" href="styles.css?v=26.1">
   </head>
   <body>
     <main class="app-shell">
@@ -30,9 +32,14 @@
 
       <section class="map-region" aria-label="Kaart met locaties">
         <div id="map"></div>
-        <button id="locateButton" class="locate-button" type="button" aria-label="Centreer kaart op mijn huidige locatie" title="Mijn locatie">
-          <span aria-hidden="true">&#8982;</span>
-        </button>
+        <div class="map-action-bar" aria-label="Kaartacties">
+          <button id="resetMapButton" class="map-action-button" type="button" aria-label="Toon alle locaties" title="Alle locaties">
+            <span aria-hidden="true">&#9711;</span>
+          </button>
+          <button id="locateButton" class="map-action-button locate-button" type="button" aria-label="Centreer kaart op mijn huidige locatie" title="Mijn locatie">
+            <span aria-hidden="true">&#8982;</span>
+          </button>
+        </div>
       </section>
     </main>
 
@@ -67,6 +74,6 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="app.js?v=25.1"></script>
+    <script src="app.js?v=26.1"></script>
   </body>
 </html>

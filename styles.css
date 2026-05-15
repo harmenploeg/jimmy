@@ -165,11 +165,16 @@ h1 {
   position: relative;
 }
 
-.locate-button {
+.map-action-bar {
   position: fixed;
   left: 14px;
   bottom: 14px;
   z-index: 850;
+  display: grid;
+  gap: 8px;
+}
+
+.map-action-button {
   display: grid;
   place-items: center;
   width: 38px;
@@ -182,20 +187,20 @@ h1 {
   cursor: pointer;
 }
 
-.locate-button span {
+.map-action-button span {
   display: block;
   font-size: 1.35rem;
   line-height: 1;
 }
 
-.locate-button:hover,
-.locate-button:focus-visible {
+.map-action-button:hover,
+.map-action-button:focus-visible {
   border-color: rgba(13, 107, 87, 0.55);
   color: var(--accent-strong);
   outline: none;
 }
 
-.locate-button:disabled {
+.map-action-button:disabled {
   cursor: wait;
   opacity: 0.72;
 }
@@ -580,19 +585,34 @@ h1 {
 
 @media (max-width: 860px) {
   .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
+    display: block;
     width: 100vw;
     min-height: 100dvh;
   }
 
   .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100vw;
     max-width: 100vw;
-    max-height: 26vh;
-    padding: max(22px, env(safe-area-inset-top)) 18px 10px;
+    max-height: 30dvh;
+    padding: 12px 14px max(12px, env(safe-area-inset-bottom));
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
+    box-shadow: 0 -16px 42px rgba(17, 30, 26, 0.13);
+  }
+
+  .sidebar::before {
+    display: block;
+    justify-self: center;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: #cfd8d4;
+    content: "";
   }
 
   .brand-block,
@@ -604,8 +624,8 @@ h1 {
   #map {
     width: 100vw;
     max-width: 100vw;
-    min-height: 74dvh;
-    height: 74dvh;
+    min-height: 100dvh;
+    height: 100dvh;
   }
 
   .leaflet-right .leaflet-control {
@@ -613,12 +633,12 @@ h1 {
   }
 
   .leaflet-bottom .leaflet-control {
-    margin-bottom: max(18px, env(safe-area-inset-bottom));
+    margin-bottom: calc(30dvh + max(16px, env(safe-area-inset-bottom)));
   }
 
-  .locate-button {
+  .map-action-bar {
     left: max(14px, env(safe-area-inset-left));
-    bottom: max(18px, env(safe-area-inset-bottom));
+    bottom: calc(30dvh + max(16px, env(safe-area-inset-bottom)));
   }
 
   .modal-panel {
