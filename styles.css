@@ -9,6 +9,7 @@
   --accent-strong: #094637;
   --water: #d8edf2;
   --shadow: 0 18px 55px rgba(17, 30, 26, 0.18);
+  --mobile-list-height: clamp(178px, 30svh, 230px);
 }
 
 * {
@@ -584,10 +585,18 @@ h1 {
 }
 
 @media (max-width: 860px) {
+  html,
+  body {
+    height: 100svh;
+    overflow: hidden;
+  }
+
   .app-shell {
     display: block;
     width: 100vw;
-    min-height: 100dvh;
+    height: 100svh;
+    min-height: 100svh;
+    overflow: hidden;
   }
 
   .sidebar {
@@ -597,7 +606,8 @@ h1 {
     bottom: 0;
     width: 100vw;
     max-width: 100vw;
-    max-height: 30dvh;
+    height: var(--mobile-list-height);
+    max-height: var(--mobile-list-height);
     padding: 12px 14px max(12px, env(safe-area-inset-bottom));
     border-right: 0;
     border-top: 1px solid var(--line);
@@ -624,8 +634,8 @@ h1 {
   #map {
     width: 100vw;
     max-width: 100vw;
-    min-height: 100dvh;
-    height: 100dvh;
+    min-height: 100svh;
+    height: 100svh;
   }
 
   .leaflet-right .leaflet-control {
@@ -633,12 +643,12 @@ h1 {
   }
 
   .leaflet-bottom .leaflet-control {
-    margin-bottom: calc(30dvh + max(16px, env(safe-area-inset-bottom)));
+    margin-bottom: calc(var(--mobile-list-height) + max(16px, env(safe-area-inset-bottom)));
   }
 
   .map-action-bar {
     left: max(14px, env(safe-area-inset-left));
-    bottom: calc(30dvh + max(16px, env(safe-area-inset-bottom)));
+    bottom: calc(var(--mobile-list-height) + max(16px, env(safe-area-inset-bottom)));
   }
 
   .modal-panel {
