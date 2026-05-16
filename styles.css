@@ -13,7 +13,7 @@
   --app-height: 100vh;
   --app-left: 0px;
   --app-top: 0px;
-  --mobile-card-height: 58px;
+  --mobile-card-height: 72px;
   --mobile-list-height: calc((var(--mobile-card-height) * 2) + 44px);
   --mobile-control-gap: 8px;
 }
@@ -28,6 +28,10 @@ body {
   width: 100%;
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
+}
+
+html {
+  font-size: 112.5%;
 }
 
 body {
@@ -669,9 +673,13 @@ h1 {
   }
 
   .location-card strong {
+    display: -webkit-box;
+    overflow: hidden;
     margin: 1px 0 0;
     font-size: 0.9rem;
     line-height: 1.15;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .map-region,
