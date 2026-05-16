@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "31.1";
+const APP_VERSION = "32.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -54,11 +54,15 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
   maxZoom: 19
 }).addTo(map);
 
-window.addEventListener("resize", () => refreshMapLayout({ fitBounds: false, keepCurrentView: true }));
+window.addEventListener("resize", handleViewportChange);
+window.visualViewport?.addEventListener("resize", handleViewportChange);
+window.visualViewport?.addEventListener("scroll", handleViewportChange);
+updateAppViewportSize();
 
 init();
 
 async function init() {
+  updateAppViewportSize();
   bindEvents();
 
   try {
@@ -76,6 +80,20 @@ async function init() {
     statusText.textContent = "De spreadsheet kon niet worden geladen. Controleer of delen via link aan staat.";
     renderEmptyState("Geen data beschikbaar. Zet de Google Sheet op delen via link of publiceer hem voor web.");
   }
+}
+
+function handleViewportChange() {
+  updateAppViewportSize();
+  refreshMapLayout({ fitBounds: false, keepCurrentView: true });
+}
+
+function updateAppViewportSize() {
+  const viewport = window.visualViewport;
+  const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
+  const width = viewport?.width || window.innerWidth || document.documentElement.clientWidth;
+
+  document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+  document.documentElement.style.setProperty("--app-width", `${Math.round(width)}px`);
 }
 
 function bindEvents() {
