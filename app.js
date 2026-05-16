@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "33.3";
+const APP_VERSION = "33.4";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -40,7 +40,8 @@ let startMapCenter = L.latLng(AMSTERDAM_CENTER);
 let suppressMapDeselectUntil = 0;
 let lastPopupActivationAt = 0;
 let suppressNextPopupCloseDeselect = false;
-let carouselTouchStartX = null;
+let carouselGesture = null;
+let carouselImageScale = 1;
 
 const map = L.map("map", {
   attributionControl: false,
@@ -86,12 +87,18 @@ async function init() {
 }
 
 function handleViewportChange() {
-  updateAppViewport();
-  window.requestAnimationFrame(() => refreshMapLayout({ fitBounds: false, keepCurrentView: true }));
+  if (updateAppViewport()) {
+    window.requestAnimationFrame(() => refreshMapLayout({ fitBounds: false, keepCurrentView: true }));
+  }
 }
 
 function updateAppViewport() {
   const viewport = window.visualViewport;
+
+  if (viewport?.scale && Math.abs(viewport.scale - 1) > 0.01) {
+    return false;
+  }
+
   const width = viewport?.width || window.innerWidth || document.documentElement.clientWidth;
   const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
   const offsetLeft = viewport?.offsetLeft || 0;
@@ -101,6 +108,7 @@ function updateAppViewport() {
   document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
   document.documentElement.style.setProperty("--app-left", `${Math.round(offsetLeft)}px`);
   document.documentElement.style.setProperty("--app-top", `${Math.round(offsetTop)}px`);
+  return true;
 }
 
 function bindEvents() {
@@ -122,8 +130,14 @@ function bindEvents() {
   nextImageButton.addEventListener("click", () => showImage(activeImageIndex + 1));
   locateButton.addEventListener("click", handleLocateButtonClick);
   resetMapButton.addEventListener("click", handleResetMapButtonClick);
-  carouselFigure.addEventListener("touchstart", handleCarouselTouchStart, { passive: true });
-  carouselFigure.addEventListener("touchend", handleCarouselTouchEnd);
+  carouselFigure.addEventListener("touchstart", handleCarouselTouchStart, { passive: false });
+  carouselFigure.addEventListener("touchmove", handleCarouselTouchMove, { passive: false });
+  carouselFigure.addEventListener("touchend", handleCarouselTouchEnd, { passive: false });
+  carouselFigure.addEventListener("touchcancel", resetCarouselGesture, { passive: false });
+  modal.addEventListener("touchmove", preventModalPageZoom, { passive: false });
+  document.addEventListener("gesturestart", preventModalPageZoom, { passive: false });
+  document.addEventListener("gesturechange", preventModalPageZoom, { passive: false });
+  document.addEventListener("gestureend", preventModalPageZoom, { passive: false });
   document.addEventListener("pointerup", handlePopupCardActivation, true);
   document.addEventListener("click", handlePopupCardActivation, true);
   document.addEventListener("touchend", handlePopupCardActivation, true);
@@ -224,20 +238,107 @@ function handleResetMapButtonClick(event) {
 }
 
 function handleCarouselTouchStart(event) {
-  carouselTouchStartX = event.changedTouches?.[0]?.clientX ?? null;
+  if (event.touches.length >= 2) {
+    event.preventDefault();
+    carouselGesture = {
+      mode: "pinch",
+      startDistance: getTouchDistance(event.touches),
+      startScale: carouselImageScale
+    };
+    return;
+  }
+
+  const touch = event.touches[0];
+  carouselGesture = touch
+    ? {
+        mode: "swipe",
+        startX: touch.clientX,
+        startY: touch.clientY
+      }
+    : null;
+}
+
+function handleCarouselTouchMove(event) {
+  if (event.touches.length >= 2) {
+    event.preventDefault();
+
+    if (!carouselGesture || carouselGesture.mode !== "pinch") {
+      carouselGesture = {
+        mode: "pinch",
+        startDistance: getTouchDistance(event.touches),
+        startScale: carouselImageScale
+      };
+      return;
+    }
+
+    const distance = getTouchDistance(event.touches);
+    if (!distance || !carouselGesture.startDistance) return;
+    setCarouselImageScale(carouselGesture.startScale * (distance / carouselGesture.startDistance));
+    return;
+  }
+
+  if (carouselImageScale > 1.01 && event.touches.length) {
+    event.preventDefault();
+  }
 }
 
 function handleCarouselTouchEnd(event) {
-  if (carouselTouchStartX === null) return;
+  if (!carouselGesture) return;
+
+  if (carouselGesture.mode === "pinch") {
+    if (event.touches.length < 2) {
+      resetCarouselGesture();
+    }
+    return;
+  }
+
+  if (carouselImageScale > 1.01) {
+    resetCarouselGesture();
+    return;
+  }
 
   const endX = event.changedTouches?.[0]?.clientX;
-  if (endX === undefined) return;
+  const endY = event.changedTouches?.[0]?.clientY;
+  if (endX === undefined || endY === undefined) {
+    resetCarouselGesture();
+    return;
+  }
 
-  const delta = endX - carouselTouchStartX;
-  carouselTouchStartX = null;
+  const deltaX = endX - carouselGesture.startX;
+  const deltaY = endY - carouselGesture.startY;
+  resetCarouselGesture();
 
-  if (Math.abs(delta) < 44) return;
-  showImage(delta < 0 ? activeImageIndex + 1 : activeImageIndex - 1);
+  if (Math.abs(deltaX) < 58 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
+  showImage(deltaX < 0 ? activeImageIndex + 1 : activeImageIndex - 1);
+}
+
+function preventModalPageZoom(event) {
+  if (!modal.classList.contains("is-open")) return;
+  if (event.touches && event.touches.length < 2) return;
+  event.preventDefault();
+}
+
+function getTouchDistance(touches) {
+  if (touches.length < 2) return 0;
+
+  const [first, second] = touches;
+  return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+}
+
+function setCarouselImageScale(scale) {
+  carouselImageScale = Math.min(3, Math.max(1, scale));
+  modalImage.style.transform = `scale(${carouselImageScale})`;
+  modalImage.classList.toggle("is-zoomed", carouselImageScale > 1.01);
+}
+
+function resetCarouselGesture() {
+  carouselGesture = null;
+}
+
+function resetCarouselImageZoom() {
+  carouselImageScale = 1;
+  modalImage.style.transform = "";
+  modalImage.classList.remove("is-zoomed");
 }
 
 function shouldSuppressMapDeselect() {
@@ -776,9 +877,20 @@ function syncMapContainerSize() {
     return;
   }
 
-  const viewportWidth = Math.round(window.visualViewport?.width || document.documentElement.clientWidth || window.innerWidth);
+  const viewportWidth = getStableViewportWidth();
   mapElement.style.width = `${viewportWidth}px`;
   region.style.width = `${viewportWidth}px`;
+}
+
+function getStableViewportWidth() {
+  const viewport = window.visualViewport;
+
+  if (viewport?.scale && Math.abs(viewport.scale - 1) > 0.01) {
+    const cssWidth = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-width"));
+    return Math.round(cssWidth || document.documentElement.clientWidth || window.innerWidth);
+  }
+
+  return Math.round(viewport?.width || document.documentElement.clientWidth || window.innerWidth);
 }
 
 function getAllDotsCenter() {
@@ -885,6 +997,7 @@ function thumbnailHtml(location) {
 function openModal(location) {
   activeLocation = location;
   activeImageIndex = 0;
+  resetCarouselImageZoom();
   modalTitle.textContent = location.name;
   modalDescription.textContent = location.description || location.address || "";
   modal.classList.add("is-open");
@@ -896,6 +1009,8 @@ function closeModal() {
   modal.classList.remove("is-open");
   modal.setAttribute("aria-hidden", "true");
   activeLocation = null;
+  resetCarouselGesture();
+  resetCarouselImageZoom();
 }
 
 function showImage(index) {
@@ -910,6 +1025,8 @@ function showImage(index) {
   activeImageIndex = (index + images.length) % images.length;
   const image = images[activeImageIndex];
 
+  resetCarouselGesture();
+  resetCarouselImageZoom();
   modalImage.src = image.url;
   modalImage.alt = image.caption || activeLocation.name;
   modalCaption.textContent = image.caption || "";
