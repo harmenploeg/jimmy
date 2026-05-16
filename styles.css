@@ -13,7 +13,7 @@
   --app-height: 100vh;
   --app-left: 0px;
   --app-top: 0px;
-  --mobile-card-height: 72px;
+  --mobile-card-height: 86px;
   --mobile-list-height: calc((var(--mobile-card-height) * 2) + 44px);
   --mobile-control-gap: 8px;
 }
@@ -31,7 +31,7 @@ body {
 }
 
 html {
-  font-size: 112.5%;
+  font-size: 125%;
 }
 
 body {
@@ -447,8 +447,8 @@ h1 {
 .popup-card strong {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 0.92rem;
-  line-height: 1.15;
+  font-size: 1.08rem;
+  line-height: 1.12;
 }
 
 .popup-card:focus-visible {
@@ -660,24 +660,24 @@ h1 {
   }
 
   .location-card {
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: 60px minmax(0, 1fr);
     min-height: var(--mobile-card-height);
     height: var(--mobile-card-height);
-    gap: 9px;
-    padding: 5px 8px 5px 5px;
+    gap: 10px;
+    padding: 7px 10px 7px 7px;
   }
 
   .location-card img {
-    width: 52px;
-    height: 46px;
+    width: 60px;
+    height: 58px;
   }
 
   .location-card strong {
     display: -webkit-box;
     overflow: hidden;
     margin: 1px 0 0;
-    font-size: 0.9rem;
-    line-height: 1.15;
+    font-size: 1.06rem;
+    line-height: 1.12;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
