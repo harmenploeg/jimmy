@@ -703,7 +703,7 @@ function syncMapContainerSize() {
     return;
   }
 
-  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportWidth = Math.round(window.visualViewport?.width || document.documentElement.clientWidth || window.innerWidth);
   mapElement.style.width = `${viewportWidth}px`;
   region.style.width = `${viewportWidth}px`;
 }
