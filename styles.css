@@ -624,11 +624,13 @@ h1 {
   body {
     position: fixed;
     inset: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .app-shell {
     position: fixed;
-    left: var(--app-left);
+    left: 0;
     top: var(--app-top);
     display: block;
     width: var(--app-width);

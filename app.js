@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "33.4";
+const APP_VERSION = "33.5";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -99,14 +99,13 @@ function updateAppViewport() {
     return false;
   }
 
-  const width = viewport?.width || window.innerWidth || document.documentElement.clientWidth;
+  const width = document.documentElement.clientWidth || window.innerWidth;
   const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
-  const offsetLeft = viewport?.offsetLeft || 0;
   const offsetTop = viewport?.offsetTop || 0;
 
   document.documentElement.style.setProperty("--app-width", `${Math.round(width)}px`);
   document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
-  document.documentElement.style.setProperty("--app-left", `${Math.round(offsetLeft)}px`);
+  document.documentElement.style.setProperty("--app-left", "0px");
   document.documentElement.style.setProperty("--app-top", `${Math.round(offsetTop)}px`);
   return true;
 }
@@ -890,7 +889,7 @@ function getStableViewportWidth() {
     return Math.round(cssWidth || document.documentElement.clientWidth || window.innerWidth);
   }
 
-  return Math.round(viewport?.width || document.documentElement.clientWidth || window.innerWidth);
+  return Math.round(document.documentElement.clientWidth || window.innerWidth);
 }
 
 function getAllDotsCenter() {
