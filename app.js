@@ -2,7 +2,7 @@ const SHEET_ID = "1rcKb4GvBBX9XjfYLc-yU3zlcEzZ1fXhC7GWl6-WC-Ro";
 const SHEET_GID = "0";
 const AMSTERDAM_CENTER = [52.3676, 4.9041];
 const USER_LOCATION_ZOOM_OFFSET = 5;
-const APP_VERSION = "30.1";
+const APP_VERSION = "29.1";
 
 window.__AMSTERDAM_LOCATIES_VERSION__ = APP_VERSION;
 
@@ -20,7 +20,6 @@ const nextImageButton = document.querySelector("#nextImage");
 const locateButton = document.querySelector("#locateButton");
 const resetMapButton = document.querySelector("#resetMapButton");
 const carouselFigure = document.querySelector(".carousel-figure");
-const carouselDots = document.querySelector("#carouselDots");
 
 let locations = [];
 let filteredLocations = [];
@@ -31,14 +30,17 @@ let latestBounds = null;
 let hasCenteredOnUser = false;
 let userLocationMarker = null;
 let selectedLocationId = "";
-let activeMoveToken = 0;
 const startMapZoom = 15;
 const selectedMapZoom = 18;
 const mapTransitionDuration = 0.8;
+const dotTapRadius = 22;
 const mapVerticalOffsetRatio = 0.2;
 const selectedDotScreenRatio = 0.33;
 let startMapCenter = L.latLng(AMSTERDAM_CENTER);
-let carouselGesture = null;
+let suppressMapDeselectUntil = 0;
+let lastPopupActivationAt = 0;
+let suppressNextPopupCloseDeselect = false;
+let carouselTouchStartX = null;
 
 const map = L.map("map", {
   attributionControl: false,
@@ -98,10 +100,14 @@ function bindEvents() {
   locateButton.addEventListener("click", handleLocateButtonClick);
   resetMapButton.addEventListener("click", handleResetMapButtonClick);
   carouselFigure.addEventListener("touchstart", handleCarouselTouchStart, { passive: true });
-  carouselFigure.addEventListener("touchmove", handleCarouselTouchMove, { passive: true });
-  carouselFigure.addEventListener("touchend", handleCarouselTouchEnd, { passive: true });
+  carouselFigure.addEventListener("touchend", handleCarouselTouchEnd);
+  document.addEventListener("pointerup", handlePopupCardActivation, true);
   document.addEventListener("click", handlePopupCardActivation, true);
-  map.on("click", handleMapClick);
+  document.addEventListener("touchend", handlePopupCardActivation, true);
+  map.getContainer().addEventListener("click", handleMapClick, true);
+  document.addEventListener("click", handleDocumentMapClick, true);
+  document.addEventListener("pointerup", handleDocumentMapClick, true);
+  document.addEventListener("touchend", handleDocumentMapClick, true);
 
   document.addEventListener("keydown", (event) => {
     if (!modal.classList.contains("is-open")) return;
@@ -118,6 +124,10 @@ function handlePopupCardActivation(event) {
   event.preventDefault();
   event.stopPropagation();
 
+  const now = Date.now();
+  if (now - lastPopupActivationAt < 450) return;
+  lastPopupActivationAt = now;
+
   const location = locations.find((item) => item.id === popupCard.dataset.popupLocationId);
   if (location) {
     openModal(location);
@@ -125,8 +135,55 @@ function handlePopupCardActivation(event) {
 }
 
 function handleMapClick(event) {
-  const originalTarget = event.originalEvent?.target;
-  if (originalTarget?.closest?.(".leaflet-popup, .map-action-bar, .map-dot-marker")) return;
+  if (shouldSuppressMapDeselect()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  const dot = event.target.closest("[data-dot-location-id], .map-dot-marker");
+  if (dot) {
+    const id = dot.dataset.dotLocationId;
+    const marker = markers.get(id);
+
+    if (marker) {
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveLocation(id, { openPopup: true, updateUrl: true });
+    }
+
+    return;
+  }
+
+  if (event.target.closest(".leaflet-popup")) return;
+
+  clearActiveLocation({ updateUrl: true });
+}
+
+function handleDocumentMapClick(event) {
+  if (event.target.closest(".leaflet-popup, .sidebar, .modal, .map-action-bar")) return;
+  const pointEvent = event.changedTouches?.[0] || event;
+  if (pointEvent.clientX === undefined || pointEvent.clientY === undefined) return;
+
+  const mapRect = map.getContainer().getBoundingClientRect();
+  const point = L.point(pointEvent.clientX - mapRect.left, pointEvent.clientY - mapRect.top);
+
+  if (point.x < 0 || point.y < 0 || point.x > mapRect.width || point.y > mapRect.height) return;
+
+  const nearest = getNearestMarker(point);
+  if (nearest && nearest.distance <= dotTapRadius) {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressMapDeselectUntil = Date.now() + 650;
+    setActiveLocation(nearest.id, { openPopup: true, updateUrl: true });
+    return;
+  }
+
+  if (shouldSuppressMapDeselect()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
 
   clearActiveLocation({ updateUrl: true });
 }
@@ -144,44 +201,39 @@ function handleResetMapButtonClick(event) {
 }
 
 function handleCarouselTouchStart(event) {
-  if (event.touches.length !== 1) {
-    carouselGesture = { isPinch: true };
-    return;
-  }
-
-  const touch = event.touches[0];
-  carouselGesture = {
-    startX: touch.clientX,
-    startY: touch.clientY,
-    isPinch: false
-  };
-}
-
-function handleCarouselTouchMove(event) {
-  if (!carouselGesture) return;
-  if (event.touches.length > 1) {
-    carouselGesture.isPinch = true;
-  }
+  carouselTouchStartX = event.changedTouches?.[0]?.clientX ?? null;
 }
 
 function handleCarouselTouchEnd(event) {
-  if (!carouselGesture || carouselGesture.isPinch) {
-    carouselGesture = null;
-    return;
-  }
+  if (carouselTouchStartX === null) return;
 
-  const touch = event.changedTouches?.[0];
-  if (!touch) {
-    carouselGesture = null;
-    return;
-  }
+  const endX = event.changedTouches?.[0]?.clientX;
+  if (endX === undefined) return;
 
-  const deltaX = touch.clientX - carouselGesture.startX;
-  const deltaY = touch.clientY - carouselGesture.startY;
-  carouselGesture = null;
+  const delta = endX - carouselTouchStartX;
+  carouselTouchStartX = null;
 
-  if (Math.abs(deltaX) < 64 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
-  showImage(deltaX < 0 ? activeImageIndex + 1 : activeImageIndex - 1);
+  if (Math.abs(delta) < 44) return;
+  showImage(delta < 0 ? activeImageIndex + 1 : activeImageIndex - 1);
+}
+
+function shouldSuppressMapDeselect() {
+  return selectedLocationId && Date.now() < suppressMapDeselectUntil;
+}
+
+function getNearestMarker(point) {
+  let nearest = null;
+
+  markers.forEach((marker, id) => {
+    const markerPoint = map.latLngToContainerPoint(marker.getLatLng());
+    const distance = point.distanceTo(markerPoint);
+
+    if (!nearest || distance < nearest.distance) {
+      nearest = { id, marker, distance };
+    }
+  });
+
+  return nearest;
 }
 
 function loadSheetRows() {
@@ -420,12 +472,34 @@ function renderMarkers(items, options = {}) {
       title: location.name
     }).addTo(map);
     marker.locationId = location.id;
+    const markerElement = marker.getElement();
+    markerElement?.setAttribute("data-dot-location-id", location.id);
+    markerElement?.addEventListener("pointerdown", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("click", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("pointerup", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("touchstart", (event) => activateMarker(event, location.id), true);
+    markerElement?.addEventListener("touchend", (event) => activateMarker(event, location.id), true);
     marker.bindPopup(popupHtml(location), {
       autoPan: false,
       closeButton: false,
       closeOnClick: true
     });
-    marker.on("click", (event) => activateMarker(event, location.id));
+    marker.on("click", () => setActiveLocation(location.id));
+    marker.on("popupopen", () => {
+      window.setTimeout(() => setActiveLocation(location.id), 0);
+    });
+    marker.on("popupclose", () => {
+      window.setTimeout(() => {
+        if (suppressNextPopupCloseDeselect) {
+          suppressNextPopupCloseDeselect = false;
+          return;
+        }
+
+        if (!document.querySelector(".popup-card[data-popup-location-id]")) {
+          clearActiveLocation({ updateUrl: true });
+        }
+      }, 0);
+    });
     markers.set(location.id, marker);
     bounds.push([location.lat, location.lng]);
   });
@@ -452,9 +526,12 @@ function createDotIcon(location) {
 }
 
 function activateMarker(event, id) {
-  if (event.originalEvent) {
-    L.DomEvent.stop(event.originalEvent);
-  }
+  const marker = markers.get(id);
+  if (!marker) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  suppressMapDeselectUntil = Date.now() + 650;
   setActiveLocation(id, { openPopup: true, updateUrl: true });
 }
 
@@ -464,7 +541,10 @@ function setActiveLocation(id, options = {}) {
   if (!marker) return;
 
   selectedLocationId = id;
-  syncSelectedLocationView({ openPopup, scrollList, animateMap: true });
+  setSelectedDot(id);
+  setSelectedListItem(id, { scrollIntoView: scrollList });
+  keepSelectedListItemInView(id);
+  keepSelectedDotCentered(id);
   if (openPopup) marker.openPopup();
   if (updateUrl) updateLocationUrl(id);
 }
@@ -472,7 +552,10 @@ function setActiveLocation(id, options = {}) {
 function clearActiveLocation(options = {}) {
   const { updateUrl = false, resetMap = true, closePopup = true } = options;
 
-  if (closePopup) map.closePopup();
+  if (closePopup) {
+    suppressNextPopupCloseDeselect = true;
+    map.closePopup();
+  }
 
   selectedLocationId = "";
   setSelectedDot("");
@@ -481,16 +564,12 @@ function clearActiveLocation(options = {}) {
   if (updateUrl) updateLocationUrl("");
 }
 
-function syncSelectedLocationView(options = {}) {
-  const { scrollList = true, animateMap = true } = options;
-  const id = selectedLocationId;
-  const marker = markers.get(id);
-  if (!marker) return;
+function selectLocation(id) {
+  setActiveLocation(id);
+}
 
-  setSelectedDot(id);
-  setSelectedListItem(id, { scrollIntoView: scrollList });
-  if (scrollList) scheduleSelectedListSync(id);
-  focusDotMarker(marker, { animate: animateMap });
+function deselectLocation() {
+  clearActiveLocation();
 }
 
 function setSelectedDot(id) {
@@ -532,7 +611,7 @@ function scrollSelectedLocationIntoView(id) {
   });
 }
 
-function scheduleSelectedListSync(id) {
+function keepSelectedListItemInView(id) {
   window.requestAnimationFrame(() => {
     if (selectedLocationId === id) {
       scrollSelectedLocationIntoView(id);
@@ -543,7 +622,13 @@ function scheduleSelectedListSync(id) {
     if (selectedLocationId === id) {
       scrollSelectedLocationIntoView(id);
     }
-  }, 180);
+  }, 220);
+
+  window.setTimeout(() => {
+    if (selectedLocationId === id) {
+      scrollSelectedLocationIntoView(id);
+    }
+  }, 900);
 }
 
 function focusDotMarker(marker, options = {}) {
@@ -551,44 +636,27 @@ function focusDotMarker(marker, options = {}) {
   selectedLocationId = marker.locationId || selectedLocationId;
   syncMapContainerSize();
   map.invalidateSize();
-  const center = getSelectedLocationMapCenter(marker.getLatLng(), selectedMapZoom);
-  const token = ++activeMoveToken;
-
-  moveMap(center, selectedMapZoom, animate);
-
-  if (animate) {
-    map.once("moveend", () => {
-      if (activeMoveToken === token && selectedLocationId === marker.locationId) {
-        moveMap(center, selectedMapZoom, false);
-      }
-    });
-  }
+  moveMap(getSelectedLocationMapCenter(marker.getLatLng(), selectedMapZoom), selectedMapZoom, animate);
 }
 
-function focusOverview(options = {}) {
-  const { animate = true } = options;
-  syncMapContainerSize();
-  map.invalidateSize();
-  startMapCenter = getOffsetMapCenter(getAllDotsCenter(), startMapZoom);
-  const token = ++activeMoveToken;
+function keepSelectedDotCentered(id) {
+  const marker = markers.get(id);
+  if (!marker) return;
 
-  moveMap(startMapCenter, startMapZoom, animate);
+  focusDotMarker(marker, { animate: true });
 
-  if (animate) {
-    map.once("moveend", () => {
-      if (activeMoveToken === token && !selectedLocationId) {
-        moveMap(startMapCenter, startMapZoom, false);
-      }
-    });
-  }
+  window.setTimeout(() => {
+    if (selectedLocationId === id) {
+      focusDotMarker(marker, { animate: false });
+    }
+  }, (mapTransitionDuration * 1000) + 180);
 }
 
 function resetToStartMap() {
-  if (latestBounds) {
-    focusOverview({ animate: true });
-  } else {
-    moveMap(AMSTERDAM_CENTER, 12, true);
-  }
+  syncMapContainerSize();
+  map.invalidateSize();
+  startMapCenter = getOffsetMapCenter(getAllDotsCenter(), startMapZoom);
+  moveMap(startMapCenter, startMapZoom, true);
 }
 
 function applyInitialLocationFromUrl() {
@@ -825,16 +893,7 @@ function showImage(index) {
   modalCount.textContent = `${activeImageIndex + 1} van ${images.length}`;
   prevImageButton.disabled = images.length < 2;
   nextImageButton.disabled = images.length < 2;
-  renderCarouselDots(images.length);
   preloadAdjacentImages(images);
-}
-
-function renderCarouselDots(count) {
-  if (!carouselDots) return;
-
-  carouselDots.innerHTML = Array.from({ length: count }, (_, index) => `
-    <span class="carousel-dot${index === activeImageIndex ? " is-active" : ""}"></span>
-  `).join("");
 }
 
 function preloadAdjacentImages(images) {
